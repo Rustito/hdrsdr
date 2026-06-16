@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Crystal Rusty Clear — HDR to SDR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0a0d13;--panel:#11161f;--panel-2:#0e131b;--line:#1f2835;--line-2:#2b3645;
+    --text:#e7edf5;--muted:#8a97a8;--hdr:#ffb24d;--sdr:#56d3ff;--good:#7fe0a0;--bad:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(255,178,77,.06), transparent 60%),
+      radial-gradient(1000px 700px at -5% 110%, rgba(86,211,255,.06), transparent 55%),
+      var(--ink);
+    color:var(--text);font-family:"Space Grotesk",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 70px}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .ramp{width:54px;height:54px;border-radius:11px;border:1px solid var(--line-2);
+    background:linear-gradient(135deg,var(--hdr),#ff7a8a 45%,var(--sdr));position:relative;overflow:hidden;flex:none}
+  .ramp::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(10,13,19,.85),transparent 55%);clip-path:polygon(0 100%,100% 100%,100% 0)}
+  .ramp span{position:absolute;left:6px;bottom:6px;font:500 9px/1 "IBM Plex Mono",monospace;color:#0a0d13;letter-spacing:.3px}
+  h1{font-size:24px;font-weight:700;letter-spacing:-.5px;margin:0}
+  .tagline{color:var(--muted);font:400 13px/1.4 "IBM Plex Mono",monospace;margin-top:3px}
+  .meta{font:400 12px/1.5 "IBM Plex Mono",monospace;color:var(--muted);text-align:right;max-width:320px}
+  .meta b{color:var(--sdr);font-weight:500}
+  .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:14px}
+  .stage{min-height:420px;display:flex;flex-direction:column}
+  .drop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:48px 28px;border-radius:14px;cursor:pointer;transition:background .15s,border-color .15s}
+  .drop.hot{background:rgba(86,211,255,.06);outline:2px dashed var(--sdr);outline-offset:-12px}
+  .drop .ic{width:46px;height:46px;color:var(--sdr);margin-bottom:16px}
+  .drop h2{margin:0 0 6px;font-size:18px;font-weight:500}
+  .drop p{margin:0;color:var(--muted);font-size:13px;max-width:360px}
+  .btn{font-family:inherit;cursor:pointer;border:none;border-radius:9px;font-weight:500;font-size:14px;
+    padding:11px 18px;transition:transform .08s,filter .15s}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--sdr);color:#04222e}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-ghost{background:transparent;border:1px solid var(--line-2);color:var(--text)}
+  .btn-ghost:hover{border-color:var(--sdr);color:var(--sdr)}
+  .drop .btn{margin-top:20px}
+  .fmt{margin-top:18px;font:400 11px/1.6 "IBM Plex Mono",monospace;color:#5a6678;max-width:380px}
+  .fmt b{color:var(--hdr);font-weight:500}
+  .err{color:var(--bad);font:400 12px/1.6 "IBM Plex Mono",monospace;margin-top:14px;max-width:400px}
+  .viewer{position:relative;display:none;border-radius:14px;overflow:hidden;background:#05070a;
+    background-image:linear-gradient(45deg,#0d1117 25%,transparent 25%),linear-gradient(-45deg,#0d1117 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#0d1117 75%),linear-gradient(-45deg,transparent 75%,#0d1117 75%);
+    background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+  .viewer img{display:block;width:100%;height:auto;pointer-events:none;user-select:none}
+  .layer{position:absolute;inset:0;overflow:hidden}
+  .layer img{position:absolute;top:0;left:0;height:100%;width:auto;max-width:none}
+  .handle{position:absolute;top:0;bottom:0;width:2px;background:var(--sdr);left:50%;transform:translateX(-1px);cursor:ew-resize}
+  .handle .grip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;
+    background:var(--sdr);color:#04222e;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .tag{position:absolute;top:10px;font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.6px;
+    padding:5px 8px;border-radius:6px;background:rgba(10,13,19,.78);backdrop-filter:blur(4px)}
+  .tag.l{left:10px;color:var(--hdr)} .tag.r{right:10px;color:var(--sdr)}
+  .ctrl{padding:18px}
+  .ctrl h3{margin:0 0 4px;font:500 12px/1 "IBM Plex Mono",monospace;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+  .ctrl .sub{font:400 11px/1.4 "IBM Plex Mono",monospace;color:#5a6678;margin-bottom:16px}
+  .group{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+  .group:first-of-type{margin-top:0;padding-top:0;border-top:none}
+  .glabel{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:1.2px;color:var(--sdr);text-transform:uppercase;margin-bottom:14px}
+  .field{margin-bottom:15px}
+  .field label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:7px}
+  .field label .val{font:500 12px "IBM Plex Mono",monospace;color:var(--sdr)}
+  .field .tip{font:400 10px/1.4 "IBM Plex Mono",monospace;color:#5a6678;margin-top:5px}
+  select{width:100%;font-family:inherit;font-size:13px;color:var(--text);background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:10px 11px;cursor:pointer}
+  select:focus-visible{outline:2px solid var(--sdr);outline-offset:1px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:var(--line-2);outline:none;margin:6px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--sdr);cursor:pointer;border:2px solid var(--ink)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--sdr);cursor:pointer;border:2px solid var(--ink)}
+  input[type=range]:focus-visible{outline:2px solid var(--sdr);outline-offset:4px}
+  .curvebox{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:16px;background:var(--panel-2)}
+  .curvebox .cap{display:flex;justify-content:space-between;font:400 10px/1 "IBM Plex Mono",monospace;color:#5a6678;margin-top:6px}
+  .readout{display:flex;gap:8px;margin-bottom:16px;font:500 11px/1 "IBM Plex Mono",monospace}
+  .pill{flex:1;border:1px solid var(--line-2);border-radius:8px;padding:9px 10px;background:var(--panel-2)}
+  .pill .k{color:#5a6678;font-size:9px;letter-spacing:.5px;text-transform:uppercase;display:block;margin-bottom:5px}
+  .pill .v{font-size:13px} .pill .v.hdr{color:var(--hdr)} .pill .v.sdr{color:var(--sdr)}
+  .actions{display:flex;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+  .actions .btn{flex:1;text-align:center}
+  .hint{font:400 11px/1.5 "IBM Plex Mono",monospace;color:#5a6678;margin-top:12px}
+  .disabled{opacity:.4;pointer-events:none}
+
+  /* guide */
+  .guide{margin-top:22px}
+  .guide .panel{padding:30px 34px}
+  .guide h2{font-size:19px;font-weight:700;margin:0 0 4px;letter-spacing:-.3px}
+  .guide .lead{color:var(--muted);font-size:14px;margin:0 0 26px;max-width:680px}
+  .guide h4{font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:1.4px;color:var(--sdr);text-transform:uppercase;margin:26px 0 12px}
+  .guide p{font-size:14px;line-height:1.65;color:#c6d0dd;margin:0 0 12px;max-width:720px}
+  .guide ol{margin:0 0 12px;padding-left:20px;max-width:720px}
+  .guide ol li{font-size:14px;line-height:1.7;color:#c6d0dd;margin-bottom:8px}
+  .guide b{color:var(--text);font-weight:500}
+  .guide .hl{color:var(--hdr)} .guide .cl{color:var(--sdr)}
+  .defs{display:grid;grid-template-columns:170px 1fr;gap:10px 22px;max-width:760px;margin-top:6px}
+  @media(max-width:620px){.defs{grid-template-columns:1fr;gap:4px 0}}
+  .defs dt{font:500 13px/1.5 "IBM Plex Mono",monospace;color:var(--hdr)}
+  .defs dd{margin:0 0 8px;font-size:13.5px;line-height:1.6;color:#c6d0dd}
+  .recipe{border:1px solid var(--line-2);border-radius:10px;padding:16px 18px;background:var(--panel-2);max-width:720px;margin-top:6px}
+  .recipe ol{padding-left:18px;margin:0}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="ramp"><span>HDR&#8594;SDR</span></div>
+      <div>
+        <h1>Crystal Rusty Clear</h1>
+        <div class="tagline">match an HDR screenshot to SDR, clearly</div>
+      </div>
+    </div>
+    <div class="meta">Runs fully in your browser, nothing uploaded. Reads real float values from <b>.hdr</b> / <b>.exr</b> and grades them on the GPU.</div>
+  </header>
+
+  <div class="grid">
+    <div class="panel stage">
+      <div class="drop" id="drop">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/>
+        </svg>
+        <h2>Upload an image</h2>
+        <p>Drag a file here, or browse. True HDR float comes from <b>.hdr</b> (Radiance) and <b>.exr</b> (OpenEXR). PNG / JPG / WEBP / AVIF load too, as SDR-range.</p>
+        <button class="btn btn-primary" id="pick" type="button">Choose image</button>
+        <div class="fmt">Windows <b>.jxr</b> screenshots can't be opened by browsers — re-export as <b>.hdr</b> or <b>.exr</b> first to keep the real values.</div>
+        <div class="err" id="err"></div>
+      </div>
+      <div class="viewer" id="viewer">
+        <img id="baseImg" alt="">
+        <div class="layer" id="topLayer"><img id="topImg" alt=""></div>
+        <div class="tag l">CLAMPED</div>
+        <div class="tag r">GRADED</div>
+        <div class="handle" id="handle"><div class="grip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/><polyline points="9 18 3 12 9 6" transform="translate(12,0)"/></svg>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="panel ctrl" id="controls">
+      <h3>Grade</h3>
+      <div class="sub">scene light &#8594; display, fine-tuned</div>
+
+      <div class="readout">
+        <div class="pill"><span class="k">Source</span><span class="v sdr" id="srcType">&#8212;</span></div>
+        <div class="pill"><span class="k">Peak white</span><span class="v hdr" id="peak">&#8212;</span></div>
+      </div>
+
+      <div class="curvebox">
+        <svg id="curve" viewBox="0 0 200 120" width="100%" height="92" aria-hidden="true"></svg>
+        <div class="cap"><span>in: scene light &#8594;</span><span>&#8592; out: display</span></div>
+      </div>
+
+      <div class="group">
+        <div class="glabel">Tone</div>
+        <div class="field">
+          <label for="algo">Curve</label>
+          <select id="algo">
+            <option value="0">ACES filmic — neutral</option>
+            <option value="1">Hable / Uncharted 2 — keeps shadows</option>
+            <option value="2">Reinhard — soft, photographic</option>
+            <option value="3">Clip — hard clamp, no curve</option>
+          </select>
+        </div>
+        <div class="field"><label for="exp">Exposure <span class="val" id="expVal">0.0 EV</span></label>
+          <input type="range" id="exp" min="-4" max="4" step="0.1" value="0"></div>
+        <div class="field"><label for="white">White point <span class="val" id="whiteVal">1.00&#215;</span></label>
+          <input type="range" id="white" min="0.5" max="8" step="0.1" value="1">
+          <div class="tip">scene value mapped to pure white — raise it to pull bright HDR highlights back into range</div></div>
+        <div class="field"><label for="contrast">Contrast <span class="val" id="contrastVal">1.00</span></label>
+          <input type="range" id="contrast" min="0.6" max="1.6" step="0.02" value="1"></div>
+        <div class="field"><label for="highlights">Highlights <span class="val" id="highlightsVal">0.00</span></label>
+          <input type="range" id="highlights" min="-1" max="1" step="0.02" value="0"></div>
+        <div class="field"><label for="shadows">Shadows <span class="val" id="shadowsVal">0.00</span></label>
+          <input type="range" id="shadows" min="-1" max="1" step="0.02" value="0"></div>
+        <div class="field"><label for="black">Black point <span class="val" id="blackVal">0.00</span></label>
+          <input type="range" id="black" min="0" max="0.08" step="0.002" value="0"></div>
+      </div>
+
+      <div class="group">
+        <div class="glabel">Color</div>
+        <div class="field"><label for="sat">Saturation <span class="val" id="satVal">100%</span></label>
+          <input type="range" id="sat" min="0.4" max="1.6" step="0.02" value="1"></div>
+        <div class="field">
+          <label for="rolloff">Color rolloff</label>
+          <select id="rolloff">
+            <option value="0">Per-channel — filmic, highlights desaturate</option>
+            <option value="1">Preserve hue — vivid, closer to HDR</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="gamut">Source gamut</label>
+          <select id="gamut">
+            <option value="0">sRGB / Rec.709 — leave as-is</option>
+            <option value="1">Rec.2020 &#8594; sRGB</option>
+            <option value="2">Display-P3 &#8594; sRGB</option>
+          </select>
+          <div class="tip">if colors look over-saturated, your HDR source is probably wide-gamut</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-ghost" id="reset" type="button">Reset</button>
+        <button class="btn btn-primary" id="save" type="button">Save PNG</button>
+      </div>
+      <div class="hint" id="status">Load an image to begin.</div>
+    </div>
+  </div>
+
+  <!-- ===================== GUIDE ===================== -->
+  <div class="guide">
+    <div class="panel">
+      <h2>How it works &amp; what to expect</h2>
+      <p class="lead">An HDR screenshot stores far more brightness than a normal screen can show. Crystal Rusty Clear reads those real values and folds them down to a standard image — and gives you a grading panel to make the SDR result look as close to the HDR original as possible.</p>
+
+      <h4>What it can open</h4>
+      <p><b class="hl">.hdr</b> (Radiance) and <b class="hl">.exr</b> (OpenEXR, uncompressed) carry genuine float light values, so these are the formats where there's real HDR to recover. <b>PNG, JPG, WEBP and AVIF</b> open too, but browsers hand them over already clamped to SDR range, so the tools act as a normal color grade rather than true HDR recovery. Windows <b>.jxr</b> Game Bar captures can't be decoded by any browser — convert them to <b>.hdr</b> or <b>.exr</b> first (most HDR-aware editors and <span class="cl">ffmpeg</span> can do this).</p>
+
+      <h4>What to expect on screen</h4>
+      <p>After loading, the <b>Peak white</b> readout tells you the brightest value found. Above <span class="hl">1.00&#215;</span> means true HDR was read — a sunlit window might read <span class="hl">8&#215;</span> or more. The preview is a slider: the left side (<b>CLAMPED</b>) is the naive hard-clamp you'd get from just saving the file, and the right (<b>GRADED</b>) is your tuned result. Drag the handle to compare. The small curve graph shows how input scene light (left) maps to display brightness (right) with your current settings.</p>
+
+      <h4>Step by step</h4>
+      <ol>
+        <li><b>Load</b> your <span class="cl">.hdr</span> or <span class="cl">.exr</span>. Check the peak — if it's well above 1&#215;, there's HDR detail to bring back.</li>
+        <li><b>Pick a curve.</b> Start with <b>ACES</b>. If shadows look crushed, try <b>Hable</b>; for a softer photographic look try <b>Reinhard</b>.</li>
+        <li><b>Set the White point</b> to roughly your peak value (or a bit below). This decides which scene brightness becomes pure white and is the single biggest lever for taming blown-out highlights.</li>
+        <li><b>Adjust Exposure</b> so midtones sit where the HDR looked — brighter or darker overall.</li>
+        <li><b>Fine-tune</b> Highlights, Shadows, Contrast and Black point until the balance matches.</li>
+        <li><b>Match the color</b> with Saturation and Color rolloff, and fix the gamut if colors look off.</li>
+        <li><b>Save PNG.</b> Drag the compare slider first to confirm the recovery against the clamped version.</li>
+      </ol>
+
+      <h4>The controls</h4>
+      <dl class="defs">
+        <dt>Curve</dt><dd>The shape that compresses bright scene light into the display range. ACES is neutral and film-like; Hable protects shadow detail; Reinhard is gentle; Clip just hard-cuts anything above white.</dd>
+        <dt>Exposure</dt><dd>Overall brightness in stops (EV). Each +1 doubles the light. Set this for the midtones.</dd>
+        <dt>White point</dt><dd>The scene value that becomes pure white. Raising it gives highlights more room before they blow out — the key control for recovering bright HDR areas.</dd>
+        <dt>Contrast</dt><dd>Steepens or flattens the curve around the midtones. Higher is punchier, lower is flatter.</dd>
+        <dt>Highlights</dt><dd>Brightens or recovers the upper range only. Pull it down to bring back detail in bright skies, lights and reflections.</dd>
+        <dt>Shadows</dt><dd>Lifts or deepens the dark range only. Lift to open up crushed shadows, lower to deepen them.</dd>
+        <dt>Black point</dt><dd>Sets where true black begins. A small amount adds depth; too much crushes shadow detail.</dd>
+        <dt>Saturation</dt><dd>Overall color intensity. HDR-to-SDR usually loses a little saturation, so a small boost often helps the match.</dd>
+        <dt>Color rolloff</dt><dd><b>Per-channel</b> is the standard filmic look where bright colors fade toward white. <b>Preserve hue</b> keeps saturated highlights colorful — usually closer to how the HDR looked.</dd>
+        <dt>Source gamut</dt><dd>HDR files are often in a wider color space than SDR. If colors look over-saturated or wrong, switch to Rec.2020 or Display-P3 to convert them correctly into sRGB.</dd>
+      </dl>
+
+      <h4>Getting the SDR closest to the HDR</h4>
+      <div class="recipe">
+        <ol>
+          <li>Curve = <b>ACES</b>, Color rolloff = <b>Preserve hue</b>.</li>
+          <li>Set <b>White point</b> near the peak reading so the brightest spots just reach white without flattening.</li>
+          <li>Nudge <b>Exposure</b> until the midtones match the HDR feel.</li>
+          <li>Pull <b>Highlights</b> down slightly to recover detail in the brightest areas.</li>
+          <li>Add a touch of <b>Saturation</b> (+5&ndash;15%) and a little <b>Contrast</b> to make up for the compression.</li>
+          <li>If wide-gamut, set <b>Source gamut</b> to Rec.2020 so colors land correctly.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file" accept=".hdr,.exr,.pic,image/*" hidden>
+
+<script>
+(() => {
+  "use strict";
+  const $=id=>document.getElementById(id);
+  const drop=$("drop"),viewer=$("viewer"),fileIn=$("file"),baseImg=$("baseImg"),topImg=$("topImg"),
+        topLayer=$("topLayer"),handle=$("handle"),status=$("status"),controls=$("controls"),errEl=$("err"),
+        curve=$("curve"),srcTypeEl=$("srcType"),peakEl=$("peak");
+  const C={algo:$("algo"),exp:$("exp"),white:$("white"),contrast:$("contrast"),highlights:$("highlights"),
+           shadows:$("shadows"),black:$("black"),sat:$("sat"),rolloff:$("rolloff"),gamut:$("gamut")};
+  let img=null, fileName="image";
+
+  /* ---------- float decoders ---------- */
+  function halfToFloat(h){const s=(h&0x8000)?-1:1,e=(h>>10)&0x1f,f=h&0x3ff;
+    if(e===0)return s*Math.pow(2,-14)*(f/1024); if(e===31)return f?NaN:s*Infinity; return s*Math.pow(2,e-15)*(1+f/1024);}
+
+  function decodeHDR(buf){
+    const d=new Uint8Array(buf);let p=0;
+    const line=()=>{let s="";while(p<d.length){const c=d[p++];if(c===10)break;s+=String.fromCharCode(c);}return s;};
+    if(!line().startsWith("#?"))throw new Error("Not a Radiance HDR file.");
+    while(true){if(line()==="")break;}
+    const m=line().match(/-Y\s+(\d+)\s+\+X\s+(\d+)/);
+    if(!m)throw new Error("Unsupported HDR layout (only -Y +X handled).");
+    const h=+m[1],w=+m[2],out=new Float32Array(w*h*3),scan=new Uint8Array(w*4);
+    for(let y=0;y<h;y++){
+      const rle=p+4<=d.length&&d[p]===2&&d[p+1]===2&&((d[p+2]<<8)|d[p+3])===w;
+      if(rle){p+=4;for(let ch=0;ch<4;ch++){let x=0;while(x<w){let c=d[p++];
+        if(c>128){c-=128;const v=d[p++];while(c-->0)scan[(x++)*4+ch]=v;}else{while(c-->0)scan[(x++)*4+ch]=d[p++];}}}}
+      else{for(let i=0;i<w*4;i++)scan[i]=d[p++];}
+      for(let x=0;x<w;x++){const e=scan[x*4+3],o=(y*w+x)*3;
+        if(e===0){out[o]=out[o+1]=out[o+2]=0;}else{const f=Math.pow(2,e-136);out[o]=scan[x*4]*f;out[o+1]=scan[x*4+1]*f;out[o+2]=scan[x*4+2]*f;}}}
+    return {width:w,height:h,data:out,source:"Radiance .hdr"};
+  }
+
+  const COMP={1:"RLE",2:"ZIPS",3:"ZIP",4:"PIZ",5:"PXR24",6:"B44",7:"B44A",8:"DWAA",9:"DWAB"};
+  function decodeEXR(buf){
+    const dv=new DataView(buf);let p=0;
+    const u32=()=>{const v=dv.getUint32(p,true);p+=4;return v;},i32=()=>{const v=dv.getInt32(p,true);p+=4;return v;},
+          u8=()=>dv.getUint8(p++),u64=()=>{const lo=dv.getUint32(p,true),hi=dv.getUint32(p+4,true);p+=8;return hi*4294967296+lo;},
+          str=()=>{let s="",c;while((c=dv.getUint8(p++))!==0)s+=String.fromCharCode(c);return s;};
+    if(u32()!==0x01312f76)throw new Error("Not an OpenEXR file.");
+    u8();const flags=u8()|(u8()<<8)|(u8()<<16);
+    if(flags&0x02)throw new Error("Tiled EXR isn't supported — re-export as scanline.");
+    if(flags&0x08)throw new Error("Deep EXR isn't supported.");
+    if(flags&0x10)throw new Error("Multi-part EXR isn't supported.");
+    let channels=null,dw=null,comp=0,lineOrder=0;
+    while(true){const name=str();if(name==="")break;str();const size=u32();const end=p+size;
+      if(name==="channels"){channels=[];while(dv.getUint8(p)!==0){const cn=str();const pt=i32();p+=4;const xs=i32();const ys=i32();
+        if(xs!==1||ys!==1)throw new Error("Sub-sampled EXR channels aren't supported.");channels.push({name:cn,type:pt});}p++;}
+      else if(name==="dataWindow")dw=[i32(),i32(),i32(),i32()];
+      else if(name==="compression")comp=u8();else if(name==="lineOrder")lineOrder=u8();
+      p=end;}
+    if(comp!==0)throw new Error("Compressed EXR ("+(COMP[comp]||comp)+") isn't supported — re-export with compression \u201cNone\u201d, or use .hdr.");
+    if(!channels||!dw)throw new Error("EXR header missing channels or data window.");
+    const [xmin,ymin,xmax,ymax]=dw,w=xmax-xmin+1,h=ymax-ymin+1,names=channels.map(c=>c.name);
+    const hasRGB=names.includes("R")&&names.includes("G")&&names.includes("B");
+    if(!hasRGB&&!names.includes("Y"))throw new Error("EXR has no R/G/B or Y channels.");
+    const sizeOf=t=>t===1?2:4,read=(t,off)=>t===1?halfToFloat(dv.getUint16(off,true)):t===2?dv.getFloat32(off,true):dv.getUint32(off,true);
+    const offsets=[];for(let i=0;i<h;i++)offsets.push(u64());
+    const out=new Float32Array(w*h*3);
+    for(let i=0;i<h;i++){let cp=offsets[i];const y=dv.getInt32(cp,true);cp+=4;dv.getInt32(cp,true);cp+=4;
+      const row=lineOrder===1?(h-1-(y-ymin)):(y-ymin);let q=cp;
+      for(const ch of channels){const bs=sizeOf(ch.type);let dest=-1;
+        if(hasRGB){if(ch.name==="R")dest=0;else if(ch.name==="G")dest=1;else if(ch.name==="B")dest=2;}
+        else if(ch.name==="Y")dest=-2;
+        if(dest===-2){for(let x=0;x<w;x++){const v=read(ch.type,q+x*bs);const o=(row*w+x)*3;out[o]=out[o+1]=out[o+2]=v;}}
+        else if(dest>=0){for(let x=0;x<w;x++)out[(row*w+x)*3+dest]=read(ch.type,q+x*bs);}
+        q+=w*bs;}}
+    return {width:w,height:h,data:out,source:"OpenEXR .exr"};
+  }
+
+  const sLin=new Float32Array(256);
+  for(let i=0;i<256;i++){const c=i/255;sLin[i]=c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}
+  async function decodeLDR(file){
+    const bmp=await createImageBitmap(file),w=bmp.width,h=bmp.height,cv=document.createElement("canvas");
+    cv.width=w;cv.height=h;const cx=cv.getContext("2d",{willReadFrequently:true});cx.drawImage(bmp,0,0);
+    const px=cx.getImageData(0,0,w,h).data,out=new Float32Array(w*h*3);
+    for(let i=0,j=0;i<px.length;i+=4,j+=3){out[j]=sLin[px[i]];out[j+1]=sLin[px[i+1]];out[j+2]=sLin[px[i+2]];}
+    bmp.close&&bmp.close();
+    return {width:w,height:h,data:out,source:(file.type.split("/")[1]||"image").toUpperCase()+" (SDR)"};
+  }
+
+  /* ---------- GPU pipeline ---------- */
+  const gl=(()=>{const c=document.createElement("canvas");return c.getContext("webgl2",{preserveDrawingBuffer:false});})();
+  let prog,tex,U={},outCanvas=document.createElement("canvas"),outCtx=outCanvas.getContext("2d");
+
+  function initGL(){
+    if(!gl)return false;
+    const vs=`#version 300 es
+    void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0.0,1.0);}`;
+    const fs=`#version 300 es
+    precision highp float;
+    uniform sampler2D tex; uniform vec2 sz;
+    uniform float exposure,white,contrast,highlights,shadows,black,sat;
+    uniform int op,hue,gamut;
+    out vec4 frag;
+    const vec3 LW=vec3(0.2126,0.7152,0.0722);
+    const mat3 R2020=mat3(1.6605,-0.1246,-0.0182,-0.5876,1.1329,-0.1006,-0.0728,-0.0083,1.1187);
+    const mat3 P3M=mat3(1.2249,-0.0420,-0.0197,-0.2247,1.0419,-0.0786,0.0,0.0,1.0979);
+    float acesR(float x){return (x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14);}
+    float hableR(float x){return ((x*(0.15*x+0.05)+0.004)/(x*(0.15*x+0.5)+0.06))-0.06667;}
+    float reinR(float x){return x/(1.0+x);}
+    float toneS(float x){ if(op==0)return acesR(x); if(op==1)return hableR(x); if(op==2)return reinR(x); return x; }
+    float enc(float c){return c<=0.0031308?c*12.92:1.055*pow(c,1.0/2.4)-0.055;}
+    void main(){
+      ivec2 fc=ivec2(gl_FragCoord.xy);
+      vec3 col=texelFetch(tex,ivec2(fc.x,int(sz.y)-1-fc.y),0).rgb;
+      if(gamut==1)col=R2020*col; else if(gamut==2)col=P3M*col;
+      col=max(col,0.0);
+      col*=exposure;
+      float fW=toneS(white);
+      if(hue==1){
+        float L=max(dot(col,LW),1e-6);
+        float Lt= op==3 ? clamp(L/white,0.0,1.0) : clamp(toneS(L)/fW,0.0,1.0);
+        col=clamp(col*(Lt/L),0.0,1.0);
+      } else {
+        if(op==3) col=clamp(col/white,0.0,1.0);
+        else col=clamp(vec3(toneS(col.r),toneS(col.g),toneS(col.b))/fW,0.0,1.0);
+      }
+      col=clamp(0.18*pow(max(col/0.18,0.0),vec3(contrast)),0.0,1.0);
+      float L=dot(col,LW);
+      float hiM=smoothstep(0.5,1.0,L), loM=1.0-smoothstep(0.0,0.5,L);
+      col=clamp(col*(1.0+highlights*hiM*0.6+shadows*loM*0.9),0.0,1.0);
+      col=clamp((col-black)/max(1.0-black,1e-3),0.0,1.0);
+      float L2=dot(col,LW);
+      col=clamp(mix(vec3(L2),col,sat),0.0,1.0);
+      frag=vec4(enc(col.r),enc(col.g),enc(col.b),1.0);
+    }`;
+    const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);
+      if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh));return sh;};
+    prog=gl.createProgram();gl.attachShader(prog,mk(gl.VERTEX_SHADER,vs));gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,fs));
+    gl.linkProgram(prog);gl.useProgram(prog);
+    ["sz","exposure","white","contrast","highlights","shadows","black","sat","op","hue","gamut"].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+    tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    return true;
+  }
+  const glReady=initGL();
+
+  function upload(im){
+    const {width:w,height:h,data}=im,rgba=new Float32Array(w*h*4);
+    for(let i=0,j=0;j<data.length;i+=4,j+=3){rgba[i]=data[j];rgba[i+1]=data[j+1];rgba[i+2]=data[j+2];rgba[i+3]=1;}
+    gl.canvas.width=w;gl.canvas.height=h;gl.viewport(0,0,w,h);
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,w,h,0,gl.RGBA,gl.FLOAT,rgba);
+    gl.uniform2f(U.sz,w,h);outCanvas.width=w;outCanvas.height=h;
+  }
+  function renderGL(p){
+    const w=gl.canvas.width,h=gl.canvas.height;
+    gl.uniform1f(U.exposure,Math.pow(2,p.ev));gl.uniform1f(U.white,p.white);gl.uniform1f(U.contrast,p.contrast);
+    gl.uniform1f(U.highlights,p.hi);gl.uniform1f(U.shadows,p.sh);gl.uniform1f(U.black,p.black);gl.uniform1f(U.sat,p.sat);
+    gl.uniform1i(U.op,p.op);gl.uniform1i(U.hue,p.hue);gl.uniform1i(U.gamut,p.gamut);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    const buf=new Uint8Array(w*h*4);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,buf);
+    const id=outCtx.createImageData(w,h),o=id.data;
+    for(let y=0;y<h;y++){const s=(h-1-y)*w*4;o.set(buf.subarray(s,s+w*4),y*w*4);}
+    outCtx.putImageData(id,0,0);return outCanvas;
+  }
+
+  /* ---------- CPU fallback (mirrors shader) ---------- */
+  const cl=(x,a,b)=>x<a?a:x>b?b:x, ss=(e0,e1,x)=>{x=cl((x-e0)/(e1-e0),0,1);return x*x*(3-2*x);};
+  const acesR=x=>(x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),
+        hableR=x=>((x*(.15*x+.05)+.004)/(x*(.15*x+.5)+.06))-.06667, reinR=x=>x/(1+x);
+  const toneS=(op,x)=>op===0?acesR(x):op===1?hableR(x):op===2?reinR(x):x;
+  const enc=c=>c<=0.0031308?c*12.92:1.055*Math.pow(c,1/2.4)-0.055;
+  function gamutConv(g,r,gg,b){
+    if(g===1)return[1.6605*r-.5876*gg-.0728*b,-.1246*r+1.1329*gg-.0083*b,-.0182*r-.1006*gg+1.1187*b];
+    if(g===2)return[1.2249*r-.2247*gg,-.0420*r+1.0419*gg,-.0197*r-.0786*gg+1.0979*b];
+    return[r,gg,b];
+  }
+  function renderCPU(p){
+    const {width:w,height:h,data}=img,gain=Math.pow(2,p.ev),fW=toneS(p.op,p.white);
+    const id=outCtx.createImageData(w,h),o=id.data;
+    for(let j=0,k=0;j<data.length;j+=3,k+=4){
+      let[r,g,b]=gamutConv(p.gamut,data[j],data[j+1],data[j+2]);
+      r=Math.max(r,0)*gain;g=Math.max(g,0)*gain;b=Math.max(b,0)*gain;
+      if(p.hue===1){const L=Math.max(.2126*r+.7152*g+.0722*b,1e-6);
+        const Lt=p.op===3?cl(L/p.white,0,1):cl(toneS(p.op,L)/fW,0,1);const s=Lt/L;r=cl(r*s,0,1);g=cl(g*s,0,1);b=cl(b*s,0,1);}
+      else if(p.op===3){r=cl(r/p.white,0,1);g=cl(g/p.white,0,1);b=cl(b/p.white,0,1);}
+      else{r=cl(toneS(p.op,r)/fW,0,1);g=cl(toneS(p.op,g)/fW,0,1);b=cl(toneS(p.op,b)/fW,0,1);}
+      r=cl(.18*Math.pow(Math.max(r/.18,0),p.contrast),0,1);g=cl(.18*Math.pow(Math.max(g/.18,0),p.contrast),0,1);b=cl(.18*Math.pow(Math.max(b/.18,0),p.contrast),0,1);
+      let L=.2126*r+.7152*g+.0722*b;const hiM=ss(.5,1,L),loM=1-ss(0,.5,L),adj=1+p.hi*hiM*.6+p.sh*loM*.9;
+      r=cl(r*adj,0,1);g=cl(g*adj,0,1);b=cl(b*adj,0,1);
+      r=cl((r-p.black)/Math.max(1-p.black,1e-3),0,1);g=cl((g-p.black)/Math.max(1-p.black,1e-3),0,1);b=cl((b-p.black)/Math.max(1-p.black,1e-3),0,1);
+      let L2=.2126*r+.7152*g+.0722*b;r=cl(L2+(r-L2)*p.sat,0,1);g=cl(L2+(g-L2)*p.sat,0,1);b=cl(L2+(b-L2)*p.sat,0,1);
+      o[k]=Math.round(enc(r)*255);o[k+1]=Math.round(enc(g)*255);o[k+2]=Math.round(enc(b)*255);o[k+3]=255;
+    }
+    outCanvas.width=w;outCanvas.height=h;outCtx.putImageData(id,0,0);return outCanvas;
+  }
+  const render=glReady?renderGL:renderCPU;
+  const blobURL=cb=>outCanvas.toBlob(b=>cb(URL.createObjectURL(b)),"image/png");
+
+  /* ---------- params ---------- */
+  function params(){return{op:+C.algo.value,ev:parseFloat(C.exp.value),white:parseFloat(C.white.value),
+    contrast:parseFloat(C.contrast.value),hi:parseFloat(C.highlights.value),sh:parseFloat(C.shadows.value),
+    black:parseFloat(C.black.value),sat:parseFloat(C.sat.value),hue:+C.rolloff.value,gamut:+C.gamut.value};}
+  const baseParams=()=>({op:3,ev:0,white:1,contrast:1,hi:0,sh:0,black:0,sat:1,hue:0,gamut:+C.gamut.value});
+
+  function setBase(){render(baseParams());blobURL(u=>{if(baseImg.src.startsWith("blob:"))URL.revokeObjectURL(baseImg.src);baseImg.src=u;});}
+  let pending=0;
+  function convert(){
+    render(params());blobURL(u=>{if(topImg.src.startsWith("blob:"))URL.revokeObjectURL(topImg.src);topImg.src=u;});
+    const names=["ACES","HABLE","REINHARD","CLIP"];
+    status.textContent=`${img.width}\u00d7${img.height} \u00b7 ${names[+C.algo.value]} \u00b7 ${glReady?"GPU float":"CPU float"} \u00b7 drag to compare`;
+  }
+  function queueConvert(){if(!img)return;status.textContent="Processing\u2026";cancelAnimationFrame(pending);pending=requestAnimationFrame(convert);}
+
+  async function loadFile(file){
+    errEl.textContent="";
+    const name=file.name||"image",ext=name.toLowerCase().split(".").pop(),isImg=file.type.startsWith("image/");
+    if(!isImg&&!["hdr","exr","pic"].includes(ext)){errEl.textContent="That isn't an image I can read.";return;}
+    fileName=name.replace(/\.[^.]+$/,"");status.textContent="Decoding\u2026";
+    try{
+      if(ext==="hdr"||ext==="pic"||ext==="exr"){const buf=await file.arrayBuffer();img=ext==="exr"?decodeEXR(buf):decodeHDR(buf);}
+      else img=await decodeLDR(file);
+    }catch(e){errEl.textContent=e.message||"Couldn't decode this file.";status.textContent="Load an image to begin.";return;}
+    let peak=0;const d=img.data;for(let i=0;i<d.length;i++)if(d[i]>peak)peak=d[i];
+    srcTypeEl.textContent=img.source;
+    if(peak>1.05){peakEl.textContent=peak.toFixed(2)+"\u00d7";peakEl.className="v hdr";srcTypeEl.className="v hdr";
+      C.white.value=Math.min(8,Math.max(1,peak*0.8)).toFixed(1);whiteVal();}
+    else{peakEl.textContent="1.00\u00d7 (SDR)";peakEl.className="v sdr";srcTypeEl.className="v sdr";}
+    if(glReady)upload(img); else if(img.width*img.height>6e6)status.textContent="Large image \u2014 CPU mode may be slow\u2026";
+    drop.style.display="none";viewer.style.display="block";controls.classList.remove("disabled");
+    setSplit(0.5);setBase();convert();drawCurve();
+  }
+
+  /* ---------- compare slider ---------- */
+  function setSplit(pp){pp=cl(pp,0,1);const w=viewer.clientWidth;topLayer.style.width=(pp*100)+"%";topImg.style.width=w+"px";handle.style.left=(pp*100)+"%";}
+  let dragging=false;
+  const pos=e=>{const r=viewer.getBoundingClientRect();return((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width;};
+  handle.addEventListener("mousedown",()=>dragging=true);handle.addEventListener("touchstart",()=>dragging=true,{passive:true});
+  window.addEventListener("mousemove",e=>{if(dragging)setSplit(pos(e));});window.addEventListener("touchmove",e=>{if(dragging)setSplit(pos(e));},{passive:true});
+  window.addEventListener("mouseup",()=>dragging=false);window.addEventListener("touchend",()=>dragging=false);
+  viewer.addEventListener("click",e=>{if(e.target===handle||handle.contains(e.target))return;setSplit(pos(e));});
+  window.addEventListener("resize",()=>{if(img)setSplit((parseFloat(handle.style.left)||50)/100);});
+
+  /* ---------- curve preview ---------- */
+  function drawCurve(){
+    const p=params(),gain=Math.pow(2,p.ev),fW=toneS(p.op,p.white);
+    const map=x=>{x*=gain;let y=p.op===3?cl(x/p.white,0,1):cl(toneS(p.op,x)/fW,0,1);return cl(.18*Math.pow(Math.max(y/.18,0),p.contrast),0,1);};
+    const W=200,H=120,pad=8,w=W-pad*2,h=H-pad*2,N=72;let pts="";
+    for(let i=0;i<=N;i++){const t=i/N,y=map(t*4);pts+=(i?"L":"M")+(pad+t*w).toFixed(1)+" "+(pad+(1-y)*h).toFixed(1)+" ";}
+    curve.innerHTML=`<defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#56d3ff"/><stop offset="1" stop-color="#ffb24d"/></linearGradient></defs>
+      <line x1="8" y1="${H-8}" x2="${W-8}" y2="${H-8}" stroke="#2b3645"/><line x1="8" y1="8" x2="8" y2="${H-8}" stroke="#2b3645"/>
+      <path d="${pts}" fill="none" stroke="url(#cg)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  }
+
+  /* ---------- labels ---------- */
+  const sign=v=>(v>=0?"+":"")+v.toFixed(2);
+  function whiteVal(){$("whiteVal").textContent=parseFloat(C.white.value).toFixed(2)+"\u00d7";}
+  function labels(){
+    $("expVal").textContent=(parseFloat(C.exp.value)>=0?"+":"")+parseFloat(C.exp.value).toFixed(1)+" EV";
+    whiteVal();
+    $("contrastVal").textContent=parseFloat(C.contrast.value).toFixed(2);
+    $("highlightsVal").textContent=sign(parseFloat(C.highlights.value));
+    $("shadowsVal").textContent=sign(parseFloat(C.shadows.value));
+    $("blackVal").textContent=parseFloat(C.black.value).toFixed(2);
+    $("satVal").textContent=Math.round(parseFloat(C.sat.value)*100)+"%";
+  }
+
+  /* ---------- wiring ---------- */
+  $("pick").addEventListener("click",()=>fileIn.click());
+  drop.addEventListener("click",e=>{if(e.target.id!=="pick")fileIn.click();});
+  fileIn.addEventListener("change",e=>{if(e.target.files[0])loadFile(e.target.files[0]);});
+  ["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hot");}));
+  ["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"||e.target===drop)drop.classList.remove("hot");}));
+  document.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("hot");const f=e.dataTransfer.files[0];if(f)loadFile(f);});
+
+  Object.values(C).forEach(el=>el.addEventListener("input",()=>{labels();drawCurve();queueConvert();}));
+  ["change"].forEach(ev=>{C.algo.addEventListener(ev,()=>{drawCurve();queueConvert();});
+    C.rolloff.addEventListener(ev,queueConvert);C.gamut.addEventListener(ev,()=>{setBase();queueConvert();});});
+
+  $("reset").addEventListener("click",()=>{
+    C.algo.value="0";C.exp.value=0;C.white.value=1;C.contrast.value=1;C.highlights.value=0;
+    C.shadows.value=0;C.black.value=0;C.sat.value=1;C.rolloff.value="0";C.gamut.value="0";
+    labels();drawCurve();if(img){setBase();queueConvert();}});
+
+  $("save").addEventListener("click",()=>{if(!img){errEl.textContent="Load an image first.";return;}
+    render(params());outCanvas.toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);
+      a.download=fileName+"_sdr.png";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);},"image/png");});
+
+  if(!glReady)status.textContent="WebGL2 unavailable \u2014 using CPU float fallback.";
+  controls.classList.add("disabled");labels();drawCurve();
+})();
+</script>
+</body>
+</html>
