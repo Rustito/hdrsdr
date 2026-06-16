@@ -62,9 +62,23 @@
   .handle{position:absolute;top:0;bottom:0;width:2px;background:var(--sdr);left:50%;transform:translateX(-1px);cursor:ew-resize}
   .handle .grip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;
     background:var(--sdr);color:#04222e;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4)}
-  .tag{position:absolute;top:10px;font:500 11px/1 "IBM Plex Mono",monospace;letter-spacing:.6px;
-    padding:5px 8px;border-radius:6px;background:rgba(10,13,19,.78);backdrop-filter:blur(4px)}
-  .tag.l{left:10px;color:var(--hdr)} .tag.r{right:10px;color:var(--sdr)}
+  .tag{position:absolute;top:10px;font:400 11px/1 "IBM Plex Mono",monospace;letter-spacing:.4px;color:var(--muted);
+    padding:6px 9px;border-radius:6px;background:rgba(10,13,19,.82);backdrop-filter:blur(4px)}
+  .tag b{font-weight:600;letter-spacing:.6px;margin-right:5px}
+  .tag.l{left:10px} .tag.l b{color:var(--hdr)}
+  .tag.r{right:10px} .tag.r b{color:var(--sdr)}
+  .viewer.mode-hdr .handle,.viewer.mode-sdr .handle{display:none}
+  .viewer.mode-hdr .tag.r{display:none}
+  .viewer.mode-sdr .tag.l{display:none}
+  /* view switch */
+  .viewbar{display:none;gap:6px;margin-bottom:12px;background:var(--panel-2);border:1px solid var(--line-2);
+    border-radius:10px;padding:5px}
+  .viewbar button{flex:1;font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;letter-spacing:.5px;
+    cursor:pointer;border:none;border-radius:7px;padding:9px 6px;background:transparent;color:var(--muted);transition:background .12s,color .12s}
+  .viewbar button:hover{color:var(--text)}
+  .viewbar button.on{background:var(--line-2);color:var(--text)}
+  .viewbar button[data-mode=hdr].on{color:var(--hdr)}
+  .viewbar button[data-mode=sdr].on{color:var(--sdr)}
   .ctrl{padding:18px}
   .ctrl h3{margin:0 0 4px;font:500 12px/1 "IBM Plex Mono",monospace;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
   .ctrl .sub{font:400 11px/1.4 "IBM Plex Mono",monospace;color:#5a6678;margin-bottom:16px}
@@ -137,11 +151,16 @@
         <div class="fmt">Windows <b>.jxr</b> screenshots can't be opened by browsers — re-export as <b>.hdr</b> or <b>.exr</b> first to keep the real values.</div>
         <div class="err" id="err"></div>
       </div>
-      <div class="viewer" id="viewer">
+      <div class="viewbar" id="viewbar">
+        <button type="button" data-mode="hdr">HDR ORIGINAL</button>
+        <button type="button" data-mode="compare" class="on">COMPARE</button>
+        <button type="button" data-mode="sdr">SDR RESULT</button>
+      </div>
+      <div class="viewer mode-compare" id="viewer">
         <img id="baseImg" alt="">
         <div class="layer" id="topLayer"><img id="topImg" alt=""></div>
-        <div class="tag l">CLAMPED</div>
-        <div class="tag r">GRADED</div>
+        <div class="tag l"><b>HDR</b> original</div>
+        <div class="tag r"><b>SDR</b> result</div>
         <div class="handle" id="handle"><div class="grip">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/><polyline points="9 18 3 12 9 6" transform="translate(12,0)"/></svg>
         </div></div>
@@ -278,7 +297,7 @@
   const $=id=>document.getElementById(id);
   const drop=$("drop"),viewer=$("viewer"),fileIn=$("file"),baseImg=$("baseImg"),topImg=$("topImg"),
         topLayer=$("topLayer"),handle=$("handle"),status=$("status"),controls=$("controls"),errEl=$("err"),
-        curve=$("curve"),srcTypeEl=$("srcType"),peakEl=$("peak");
+        curve=$("curve"),srcTypeEl=$("srcType"),peakEl=$("peak"),viewbar=$("viewbar");
   const C={algo:$("algo"),exp:$("exp"),white:$("white"),contrast:$("contrast"),highlights:$("highlights"),
            shadows:$("shadows"),black:$("black"),sat:$("sat"),rolloff:$("rolloff"),gamut:$("gamut")};
   let img=null, fileName="image";
@@ -496,19 +515,29 @@
       C.white.value=Math.min(8,Math.max(1,peak*0.8)).toFixed(1);whiteVal();}
     else{peakEl.textContent="1.00\u00d7 (SDR)";peakEl.className="v sdr";srcTypeEl.className="v sdr";}
     if(glReady)upload(img); else if(img.width*img.height>6e6)status.textContent="Large image \u2014 CPU mode may be slow\u2026";
-    drop.style.display="none";viewer.style.display="block";controls.classList.remove("disabled");
-    setSplit(0.5);setBase();convert();drawCurve();
+    drop.style.display="none";viewer.style.display="block";viewbar.style.display="flex";controls.classList.remove("disabled");
+    setBase();convert();drawCurve();applyMode("compare");
   }
 
-  /* ---------- compare slider ---------- */
+  /* ---------- compare slider + view modes ---------- */
+  let mode="compare";
+  function applyMode(m){
+    mode=m;
+    viewer.className="viewer mode-"+m;
+    [...viewbar.children].forEach(b=>b.classList.toggle("on",b.dataset.mode===m));
+    if(m==="hdr"){topLayer.style.width="0%";}
+    else if(m==="sdr"){topLayer.style.width="100%";topImg.style.width=viewer.clientWidth+"px";}
+    else{setSplit(0.5);}
+  }
   function setSplit(pp){pp=cl(pp,0,1);const w=viewer.clientWidth;topLayer.style.width=(pp*100)+"%";topImg.style.width=w+"px";handle.style.left=(pp*100)+"%";}
   let dragging=false;
   const pos=e=>{const r=viewer.getBoundingClientRect();return((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width;};
   handle.addEventListener("mousedown",()=>dragging=true);handle.addEventListener("touchstart",()=>dragging=true,{passive:true});
-  window.addEventListener("mousemove",e=>{if(dragging)setSplit(pos(e));});window.addEventListener("touchmove",e=>{if(dragging)setSplit(pos(e));},{passive:true});
+  window.addEventListener("mousemove",e=>{if(dragging&&mode==="compare")setSplit(pos(e));});window.addEventListener("touchmove",e=>{if(dragging&&mode==="compare")setSplit(pos(e));},{passive:true});
   window.addEventListener("mouseup",()=>dragging=false);window.addEventListener("touchend",()=>dragging=false);
-  viewer.addEventListener("click",e=>{if(e.target===handle||handle.contains(e.target))return;setSplit(pos(e));});
-  window.addEventListener("resize",()=>{if(img)setSplit((parseFloat(handle.style.left)||50)/100);});
+  viewer.addEventListener("click",e=>{if(mode!=="compare"||e.target===handle||handle.contains(e.target))return;setSplit(pos(e));});
+  [...viewbar.children].forEach(b=>b.addEventListener("click",()=>applyMode(b.dataset.mode)));
+  window.addEventListener("resize",()=>{if(img)applyMode(mode);});
 
   /* ---------- curve preview ---------- */
   function drawCurve(){
